@@ -13,6 +13,10 @@ namespace WiC64 {
     Connection::Connection() {
         WiFi.setHostname(("wic64-" + WiFi.macAddress()).c_str());
         WiFi.mode(WIFI_STA);
+        // No modem sleep: with it, packets for the WiC64 wait for the next
+        // DTIM beacon, about 100 ms, which makes request/response protocols
+        // (debuggers, games) slow.
+        WiFi.setSleep(false);
 
         WiFi.onEvent(onConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
         WiFi.onEvent(onDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
@@ -64,6 +68,7 @@ namespace WiC64 {
         ESP_LOGI(TAG, "GATE: %s", WiFi.gatewayIP().toString().c_str());
         ESP_LOGI(TAG, "DNS1: %s", WiFi.dnsIP().toString().c_str());
         display->ip(connection->ipAddress());
+        esp_wifi_set_ps(WIFI_PS_NONE);
     }
 
     void Connection::connect() {
