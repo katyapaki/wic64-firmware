@@ -85,7 +85,10 @@ namespace WiC64 {
             bool connected = false;
             static portMUX_TYPE mutex;
 
-            volatile uint32_t timeOfLastActivity = 0;
+            volatile int64_t timeOfLastActivityUs = 0;
+            // The time the handshake interrupt took, once per byte: the byte
+            // loop reads the timer only there.
+            volatile int64_t isrNow = 0;
             // After the final handshake of an answer the C64 reads the last
             // byte, and that read is a handshake too. It ends the answer;
             // it does not start a request.
@@ -123,6 +126,7 @@ namespace WiC64 {
             inline void IRAM_ATTR writeNextByte(void);
 
             inline void IRAM_ATTR sendHandshakeSignal();
+            inline void IRAM_ATTR pulse();
 
             void startTransfer(
                 TRANSFER_TYPE type,
@@ -190,6 +194,9 @@ namespace WiC64 {
             // last byte of an answer, instead of a fixed pause.
             void waitForTrailingHandshake(uint32_t maxUs);
             static const int64_t HANDSHAKE_GAP_US = 200;
+            // The FLAG2 pulse's length (diagnostics, ?pulse=N on the web page,
+            // 1-10 us; the stock firmware's 5).
+            volatile uint32_t pulseUs = 5;
             volatile int64_t timeOfLastHandshakeSentUs = 0;
             void sendSpacedHandshake(void);
             // A request was answered in full: the C64 is idle until its next

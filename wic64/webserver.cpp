@@ -54,6 +54,11 @@ namespace WiC64 {
             if (level == "VERBOSE") WiC64::loglevel(ESP_LOG_VERBOSE); else goto ERROR;
         }
 
+        if (server->hasArg("pulse")) {
+            uint32_t us = strtoul(server->arg("pulse").c_str(), NULL, 10);
+            if (us >= 1 && us <= 10) userport->pulseUs = us;
+        }
+
         if (server->hasArg("fastskip")) {
             userport->fastSkip = strtoul(server->arg("fastskip").c_str(), NULL, 16);
         }
@@ -77,6 +82,7 @@ namespace WiC64 {
             log_level_to_string(esp_log_level_get(WiC64::TAG)) +
             "</strong></p>"
             "<p>fastskip: <strong>" + String(userport->fastSkip, HEX) + "</strong></p>"
+            "<p>pulse: <strong>" + String(userport->pulseUs) + "</strong> us</p>"
 
             "<ul>"
             "<li><a href='/?level=NONE'>NONE</a></li>"

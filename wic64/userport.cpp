@@ -148,10 +148,14 @@ namespace WiC64 {
         ESP_LOGV(TAG, "Port set to output");
     }
 
-    inline void Userport::sendHandshakeSignal() {
+    inline void Userport::pulse() {
         SET_LOW(HANDSHAKE_LINE_ESP_TO_C64);
-        esp_rom_delay_us(5);
+        esp_rom_delay_us(pulseUs);
         SET_HIGH(HANDSHAKE_LINE_ESP_TO_C64);
+    }
+
+    inline void Userport::sendHandshakeSignal() {
+        pulse();
         timeOfLastHandshakeSentUs = esp_timer_get_time();
     }
 
@@ -248,7 +252,9 @@ namespace WiC64 {
 
     inline IRAM_ATTR void Userport::continueTransfer(void) {
         if (++pos < size) {
-            sendHandshakeSignal();
+            // In the byte loop: the time is the interrupt's (isrNow).
+            pulse();
+            timeOfLastHandshakeSentUs = isrNow;
         } else {
             userport->previousTransferType = userport->transferType;
             userport->transferType = TRANSFER_TYPE_NONE;
@@ -335,8 +341,7 @@ namespace WiC64 {
         // to the service, or one we dropped), and waits for a handshake: a
         // pulse now would pass for it. Only after LONG_QUIET_MS of silence,
         // longer than the C64 waits, is it sure to have given up.
-        uint32_t now = esp_timer_get_time() / 1000ULL;
-        uint32_t quiet = now - timeOfLastActivity;
+        uint32_t quiet = (uint32_t) ((esp_timer_get_time() - timeOfLastActivityUs) / 1000);
         bool clean = timeOfLastHandshakeUs <= timeOfLastRequestEndUs;
         if (connected &&
             transferType == TRANSFER_TYPE_NONE &&
@@ -378,11 +383,11 @@ namespace WiC64 {
     }
 
     void Userport::resetTimeout(void) {
-        timeOfLastActivity = esp_timer_get_time() / 1000ULL;
+        timeOfLastActivityUs = esp_timer_get_time();
     }
 
     bool Userport::hasTimedOut(void) {
-        return millis() - timeOfLastActivity > transferTimeout;
+        return (esp_timer_get_time() - timeOfLastActivityUs) / 1000 > (int64_t) transferTimeout;
     }
 
     void Userport::onRequestInitiated(void* arg, esp_event_base_t base, int32_t event_id, void* data) {
@@ -445,6 +450,7 @@ namespace WiC64 {
         userport->setTransferRunning();
 
         ESP_LOGV(TAG, "Initiating send by writing first byte");
+        userport->isrNow = esp_timer_get_time();
         userport->writeFirstByte();
     }
 
@@ -465,15 +471,19 @@ namespace WiC64 {
     }
 
     void Userport::onHandshakeSignalReceived(void) {
+        // The one timer read per byte: the C64's handshake, activity for the
+        // timeout, and the time the byte loop's own handshake goes out.
+        int64_t now = esp_timer_get_time();
         if (userport->trailingHandshakeDue && userport->transferType == TRANSFER_TYPE_NONE) {
             userport->trailingHandshakeDue = false;
             // The read of the last byte, soon after the final handshake; a
             // C64 that gave up halfway sends none, and its next request must
             // not be taken for it.
-            if (esp_timer_get_time() - userport->timeOfFinalHandshake < 20000) return;
+            if (now - userport->timeOfFinalHandshake < 20000) return;
         }
-        userport->timeOfLastHandshakeUs = esp_timer_get_time();
-        userport->resetTimeout();
+        userport->isrNow = now;
+        userport->timeOfLastHandshakeUs = now;
+        userport->timeOfLastActivityUs = now;
 
         if (userport->transferState == TRANSFER_STATE_PENDING) {
             userport->post(USERPORT_READY_TO_SEND);
