@@ -194,6 +194,25 @@ namespace WiC64 {
             // last byte of an answer, instead of a fixed pause.
             void waitForTrailingHandshake(uint32_t maxUs);
             static const int64_t HANDSHAKE_GAP_US = 200;
+
+            // Diagnostics: the last userport events, printed to the log when
+            // a transfer is aborted. what: H C64 handshake (a: type << 4 |
+            // state, b: pos), T its read of an answer's last byte, p our
+            // handshake in the byte loop, I turnaround, K continuation, L
+            // final, R doorbell, B transfer begins (a: type, b: size), C it
+            // completed, P event posted (a: event), X posting failed, A abort.
+            struct TraceEvent { uint32_t us; char what; uint8_t a; uint16_t b; };
+            static const uint32_t TRACE_SIZE = 64;
+            TraceEvent traceBuf[TRACE_SIZE];
+            volatile uint32_t traceNext = 0;
+            inline void IRAM_ATTR trace(char what, uint8_t a, uint16_t b, int64_t us) {
+                TraceEvent &e = traceBuf[traceNext++ & (TRACE_SIZE - 1)];
+                e.us = (uint32_t) us;
+                e.what = what;
+                e.a = a;
+                e.b = b;
+            }
+            void dumpTrace(void);
             // The FLAG2 pulse's length (diagnostics, ?pulse=N on the web page,
             // 1-10 us; the stock firmware's 5).
             volatile uint32_t pulseUs = 5;

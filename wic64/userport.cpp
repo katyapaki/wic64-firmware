@@ -172,6 +172,16 @@ namespace WiC64 {
         sendHandshakeSignal();
     }
 
+    void Userport::dumpTrace(void) {
+        uint32_t end = traceNext;
+        uint32_t n = end < TRACE_SIZE ? end : TRACE_SIZE;
+        uint32_t last = traceBuf[(end - 1) & (TRACE_SIZE - 1)].us;
+        for (uint32_t k = end - n; k != end; k++) {
+            const TraceEvent &e = traceBuf[k & (TRACE_SIZE - 1)];
+            ESP_LOGW(TAG, "trace %8d us %c %02x %u", (int) (e.us - last), e.what, e.a, e.b);
+        }
+    }
+
     inline void Userport::readByte(uint8_t *byte) {
         (*byte) = 0;
         IS_HIGH(PB0) && ((*byte) |= 1);
@@ -234,9 +244,11 @@ namespace WiC64 {
         timeTransferStarted = millis();
         createTimeoutTask();
 
+        trace('B', (uint8_t) type, (uint16_t) size, esp_timer_get_time());
         if (isInitiallySending()) {
             ESP_LOGV(TAG, "Sending initial handshake to start pending transfer");
             if (!skips(2)) vTaskDelay(pdMS_TO_TICKS(1));
+            trace('I', 0, 0, esp_timer_get_time());
             sendSpacedHandshake(); // first handshake the c64 is waiting for after changing direction
         }
 
@@ -246,6 +258,7 @@ namespace WiC64 {
 
             ESP_LOGV(TAG, "Sending initial handshake signal");
             if (!skips(1)) vTaskDelay(pdMS_TO_TICKS(5));
+            trace('K', 0, 0, esp_timer_get_time());
             sendSpacedHandshake();
         }
     }
@@ -255,6 +268,7 @@ namespace WiC64 {
             // In the byte loop: the time is the interrupt's (isrNow).
             pulse();
             timeOfLastHandshakeSentUs = isrNow;
+            trace('p', 0, (uint16_t) pos, isrNow);
         } else {
             userport->previousTransferType = userport->transferType;
             userport->transferType = TRANSFER_TYPE_NONE;
@@ -270,6 +284,7 @@ namespace WiC64 {
                 userport->timeOfFinalHandshake = esp_timer_get_time();
                 userport->trailingHandshakeDue = true;
             }
+            userport->trace('L', (uint8_t) type, 0, esp_timer_get_time());
             userport->sendSpacedHandshake();
 
             if (type == TRANSFER_TYPE_RECEIVE_FULL && !userport->skips(4)) {
@@ -279,6 +294,7 @@ namespace WiC64 {
             ESP_LOGD(TAG, "Sent final handshake signal");
         }
 
+        userport->trace('C', (uint8_t) type, (uint16_t) userport->size, esp_timer_get_time());
         userport->deleteTimeoutTask();
         userport->onFailureCallback = NULL;
 
@@ -310,7 +326,9 @@ namespace WiC64 {
     }
 
     void Userport::abortTransfer(const char* reason) {
+        trace('A', (uint8_t) transferType, (uint16_t) pos, esp_timer_get_time());
         ESP_LOGE(TAG, "Aborting transfer: %s", reason);
+        dumpTrace();
         setPortToInput();
 
         transferType = TRANSFER_TYPE_NONE;
@@ -346,6 +364,7 @@ namespace WiC64 {
         if (connected &&
             transferType == TRANSFER_TYPE_NONE &&
             ((clean && quiet >= quietMs) || quiet >= LONG_QUIET_MS)) {
+            trace('R', 0, 0, esp_timer_get_time());
             sendHandshakeSignal();
             rung = true;
         }
@@ -474,8 +493,11 @@ namespace WiC64 {
         // The one timer read per byte: the C64's handshake, activity for the
         // timeout, and the time the byte loop's own handshake goes out.
         int64_t now = esp_timer_get_time();
+        userport->trace('H', (uint8_t) ((userport->transferType << 4) | userport->transferState),
+                        (uint16_t) userport->pos, now);
         if (userport->trailingHandshakeDue && userport->transferType == TRANSFER_TYPE_NONE) {
             userport->trailingHandshakeDue = false;
+            userport->trace('T', 0, 0, now);
             // The read of the last byte, soon after the final handshake; a
             // C64 that gave up halfway sends none, and its next request must
             // not be taken for it.
@@ -540,13 +562,14 @@ namespace WiC64 {
     }
 
     inline void IRAM_ATTR Userport::post(userport_event_t event) {
-        BaseType_t task_unblocked;
+        BaseType_t task_unblocked = pdFALSE;
 
-        esp_event_isr_post_to(
+        esp_err_t err = esp_event_isr_post_to(
             userport->event_loop_handle,
             USERPORT_EVENTS, event,
             NULL, 0,
             &task_unblocked);
+        userport->trace(err == ESP_OK ? 'P' : 'X', (uint8_t) event, 0, esp_timer_get_time());
 
         if (task_unblocked) {
             portYIELD_FROM_ISR();
