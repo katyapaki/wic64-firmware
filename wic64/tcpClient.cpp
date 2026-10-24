@@ -32,7 +32,8 @@ namespace WiC64 {
         }
 
         xSemaphoreTake(m_lock, portMAX_DELAY);
-        connected = m_client.connect(host, port, 5000);
+        // remoteTimeout: 5 s, or what the request before asked for ($32).
+        connected = m_client.connect(host, port, (int32_t) remoteTimeout);
         xSemaphoreGive(m_lock);
 
         ESP_LOG_LEVEL((connected ? ESP_LOG_INFO : ESP_LOG_ERROR), TAG,
