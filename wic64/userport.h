@@ -86,6 +86,7 @@ namespace WiC64 {
             static portMUX_TYPE mutex;
 
             volatile uint32_t timeOfLastActivity = 0;
+            volatile uint32_t timeOfLastRequestEnd = 0;
             volatile uint32_t timeTransferStarted = 0;
 
             uint8_t lineNoiseCount = 0;
@@ -167,6 +168,10 @@ namespace WiC64 {
             // c64-binmon doorbell: pulse FLAG2 once, if no transfer runs
             // and the C64 has not handshaken for quietMs. True if it rang.
             bool ringDoorbell(uint32_t quietMs);
+            // A request was answered in full: the C64 is idle until its next
+            // handshake.
+            void requestEnded(void);
+            static const uint32_t LONG_QUIET_MS = 2000;
 
             inline void resetTimeout(void);
             inline bool hasTimedOut(void);

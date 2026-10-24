@@ -300,18 +300,27 @@ namespace WiC64 {
         bool rung = false;
 
         portENTER_CRITICAL(&mutex);
-        // A C64 handshake in the last quietMs may be the start of a request
-        // that the service has not taken up yet: a pulse now would pass for
-        // the answer to it.
+        // A C64 handshake since the last request we completed means it has
+        // started something we did not finish (a request still on its way
+        // to the service, or one we dropped), and waits for a handshake: a
+        // pulse now would pass for it. Only after LONG_QUIET_MS of silence,
+        // longer than the C64 waits, is it sure to have given up.
+        uint32_t now = esp_timer_get_time() / 1000ULL;
+        uint32_t quiet = now - timeOfLastActivity;
+        bool clean = timeOfLastActivity <= timeOfLastRequestEnd;
         if (connected &&
             transferType == TRANSFER_TYPE_NONE &&
-            esp_timer_get_time() / 1000ULL - timeOfLastActivity >= quietMs) {
+            ((clean && quiet >= quietMs) || quiet >= LONG_QUIET_MS)) {
             sendHandshakeSignal();
             rung = true;
         }
         portEXIT_CRITICAL(&mutex);
 
         return rung;
+    }
+
+    void Userport::requestEnded(void) {
+        timeOfLastRequestEnd = esp_timer_get_time() / 1000ULL;
     }
 
     void Userport::createTimeoutTask(void) {

@@ -311,6 +311,7 @@ namespace WiC64 {
         if (!service->response->isQueued()) {
             ESP_LOG_HEXV(TAG, "Response", data, size);
         }
+        userport->requestEnded();
         service->finalizeRequest("Request handled successfully", true);
     }
 
