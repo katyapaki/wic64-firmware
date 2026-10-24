@@ -311,7 +311,7 @@ namespace WiC64 {
         // longer than the C64 waits, is it sure to have given up.
         uint32_t now = esp_timer_get_time() / 1000ULL;
         uint32_t quiet = now - timeOfLastActivity;
-        bool clean = timeOfLastActivity <= timeOfLastRequestEnd;
+        bool clean = timeOfLastHandshakeUs <= timeOfLastRequestEndUs;
         if (connected &&
             transferType == TRANSFER_TYPE_NONE &&
             ((clean && quiet >= quietMs) || quiet >= LONG_QUIET_MS)) {
@@ -324,7 +324,10 @@ namespace WiC64 {
     }
 
     void Userport::requestEnded(void) {
-        timeOfLastRequestEnd = esp_timer_get_time() / 1000ULL;
+        // As of the answer's final handshake, not now: the pauses after it
+        // leave the C64 time to start its next request, which must count
+        // as activity after the end.
+        timeOfLastRequestEndUs = timeOfFinalHandshake;
     }
 
     void Userport::createTimeoutTask(void) {
@@ -443,6 +446,7 @@ namespace WiC64 {
             // not be taken for it.
             if (esp_timer_get_time() - userport->timeOfFinalHandshake < 20000) return;
         }
+        userport->timeOfLastHandshakeUs = esp_timer_get_time();
         userport->resetTimeout();
 
         if (userport->transferState == TRANSFER_STATE_PENDING) {

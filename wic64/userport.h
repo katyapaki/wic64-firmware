@@ -86,12 +86,15 @@ namespace WiC64 {
             static portMUX_TYPE mutex;
 
             volatile uint32_t timeOfLastActivity = 0;
-            volatile uint32_t timeOfLastRequestEnd = 0;
             // After the final handshake of an answer the C64 reads the last
             // byte, and that read is a handshake too. It ends the answer;
             // it does not start a request.
             volatile bool trailingHandshakeDue = false;
             volatile int64_t timeOfFinalHandshake = 0;
+            // In microseconds: the C64 may start a request within the same
+            // millisecond as an answer's final handshake.
+            volatile int64_t timeOfLastHandshakeUs = 0;
+            volatile int64_t timeOfLastRequestEndUs = 0;
             volatile uint32_t timeTransferStarted = 0;
 
             uint8_t lineNoiseCount = 0;
