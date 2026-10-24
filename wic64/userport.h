@@ -221,6 +221,13 @@ namespace WiC64 {
             // latches even while interrupts are masked (the C64's pulse lasts
             // one cycle, about 1 us).
             volatile bool pc2Edge = false;
+            // Fast mode: a handshake of ours the C64 did not answer within
+            // REPULSE_US is sent again. The C64's CIA can lose a FLAG edge
+            // that comes just as it reads $DD0D (the stub polls it), and
+            // the stub answers each in some 30 us. (?repulse=0/1, on.)
+            static const int64_t REPULSE_US = 3000;
+            volatile bool repulse = true;
+            void repulseIfUnanswered(void);
             void setPc2Edge(bool edge);
             volatile int64_t timeOfLastHandshakeSentUs = 0;
             void sendSpacedHandshake(void);

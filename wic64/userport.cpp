@@ -351,10 +351,35 @@ namespace WiC64 {
     }
 
     void Userport::waitForTrailingHandshake(uint32_t maxUs) {
-        int64_t until = esp_timer_get_time() + maxUs;
-        while (trailingHandshakeDue && esp_timer_get_time() < until) {
-            esp_rom_delay_us(5);
+        for (int tries = 0; tries < 3; tries++) {
+            int64_t until = esp_timer_get_time() + maxUs;
+            while (trailingHandshakeDue && esp_timer_get_time() < until) {
+                esp_rom_delay_us(5);
+            }
+            if (!trailingHandshakeDue || !repulse) return;
+            // The C64 may have lost the final handshake: once more.
+            portENTER_CRITICAL(&mutex);
+            if (trailingHandshakeDue) {
+                trace('Z', 1, 0, esp_timer_get_time());
+                sendHandshakeSignal();
+            }
+            portEXIT_CRITICAL(&mutex);
         }
+    }
+
+    void Userport::repulseIfUnanswered(void) {
+        if (!fast || !repulse) return;
+        portENTER_CRITICAL(&mutex);
+        int64_t now = esp_timer_get_time();
+        // A transfer runs, our handshake came after the C64's last one, and
+        // it has had time to answer: it lost it.
+        if (transferType != TRANSFER_TYPE_NONE &&
+            timeOfLastHandshakeSentUs > timeOfLastHandshakeUs &&
+            now - timeOfLastHandshakeSentUs > REPULSE_US) {
+            trace('Z', 0, (uint16_t) pos, now);
+            sendHandshakeSignal();
+        }
+        portEXIT_CRITICAL(&mutex);
     }
 
     bool Userport::ringDoorbell(uint32_t quietMs) {
@@ -587,7 +612,8 @@ namespace WiC64 {
         userport->resetTimeout();
 
         while(true) {
-            vTaskDelay(pdMS_TO_TICKS(250));
+            vTaskDelay(pdMS_TO_TICKS(userport->fast && userport->repulse ? 2 : 250));
+            userport->repulseIfUnanswered();
 
             if (userport->hasTimedOut()) {
                 userport->abortTransfer("Timed out");
