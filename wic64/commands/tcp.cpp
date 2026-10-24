@@ -30,6 +30,9 @@ namespace WiC64 {
                 return "TCP (close)";
                 break;
 
+            case WIC64_CMD_TCP_NOTIFY:
+                return "TCP (notify)";
+
             default: return "TCP (unknown)";
         }
     }
@@ -84,6 +87,7 @@ namespace WiC64 {
         }
 
         else if (id() == WIC64_CMD_TCP_READ) {
+            tcpClient->notifyServed();
             if (tcpClient->connected()) {
                 if ((size = tcpClient->read(response()->data())) > -1) {
                     response()->size(size);
@@ -91,6 +95,18 @@ namespace WiC64 {
             } else {
                 error(NETWORK_ERROR, "TCP connection closed", "!E");
             }
+        }
+
+        else if (id() == WIC64_CMD_TCP_NOTIFY) {
+            // Payload: 1 = pulse FLAG2 whenever data waits (or the peer
+            // closed) and the C64 has not read since, 0 = stop. Opening or
+            // closing a connection stops it too.
+            if (request()->payload()->size() < 1) {
+                error(CLIENT_ERROR, "No mode specified", "!0");
+                goto DONE;
+            }
+            tcpClient->notify(request()->payload()->data()[0] != 0);
+            success("Success", "0");
         }
 
         else if (id() == WIC64_CMD_TCP_WRITE) {

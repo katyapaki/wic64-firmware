@@ -44,6 +44,9 @@ namespace WiC64 {
         public:
             Service();
 
+            // No request is being received, run or answered.
+            bool idle(void) { return command == NULL; }
+
             esp_event_loop_handle_t eventLoop() { return event_loop_handle; }
             static void queueTask(void* payload_size_ptr);
 

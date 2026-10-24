@@ -27,6 +27,7 @@
 #define WIC64_CMD_TCP_READ      0x22
 #define WIC64_CMD_TCP_WRITE     0x23
 #define WIC64_CMD_TCP_CLOSE     0x2e
+#define WIC64_CMD_TCP_NOTIFY    0x60 // c64-binmon: pulse FLAG2 when TCP data waits
 
 #define WIC64_CMD_GET_SERVER 0x12
 #define WIC64_CMD_SET_SERVER 0x08

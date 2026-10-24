@@ -164,6 +164,10 @@ namespace WiC64 {
 
             void abortTransfer(const char* reason);
 
+            // c64-binmon doorbell: pulse FLAG2 once, if no transfer runs
+            // and the C64 has not handshaken for quietMs. True if it rang.
+            bool ringDoorbell(uint32_t quietMs);
+
             inline void resetTimeout(void);
             inline bool hasTimedOut(void);
             static void timeoutTask(void*);
