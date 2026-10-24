@@ -216,6 +216,12 @@ namespace WiC64 {
             // The FLAG2 pulse's length (diagnostics, ?pulse=N on the web page,
             // 1-10 us; the stock firmware's 5).
             volatile uint32_t pulseUs = 5;
+            // How PC2 is caught (diagnostics, ?pc2edge=0/1): its low level, as
+            // the stock firmware does, or its falling edge, which the GPIO
+            // latches even while interrupts are masked (the C64's pulse lasts
+            // one cycle, about 1 us).
+            volatile bool pc2Edge = false;
+            void setPc2Edge(bool edge);
             volatile int64_t timeOfLastHandshakeSentUs = 0;
             void sendSpacedHandshake(void);
             // A request was answered in full: the C64 is idle until its next

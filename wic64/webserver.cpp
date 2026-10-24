@@ -54,6 +54,10 @@ namespace WiC64 {
             if (level == "VERBOSE") WiC64::loglevel(ESP_LOG_VERBOSE); else goto ERROR;
         }
 
+        if (server->hasArg("pc2edge")) {
+            userport->setPc2Edge(server->arg("pc2edge") == "1");
+        }
+
         if (server->hasArg("pulse")) {
             uint32_t us = strtoul(server->arg("pulse").c_str(), NULL, 10);
             if (us >= 1 && us <= 10) userport->pulseUs = us;
@@ -83,6 +87,7 @@ namespace WiC64 {
             "</strong></p>"
             "<p>fastskip: <strong>" + String(userport->fastSkip, HEX) + "</strong></p>"
             "<p>pulse: <strong>" + String(userport->pulseUs) + "</strong> us</p>"
+            "<p>pc2edge: <strong>" + String(userport->pc2Edge ? 1 : 0) + "</strong></p>"
 
             "<ul>"
             "<li><a href='/?level=NONE'>NONE</a></li>"

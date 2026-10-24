@@ -68,7 +68,7 @@ namespace WiC64 {
         gpio_pullup_en(HANDSHAKE_LINE_C64_TO_ESP);
         gpio_set_drive_capability(HANDSHAKE_LINE_C64_TO_ESP, GPIO_DRIVE_CAP_MAX);
 
-        gpio_set_intr_type(HANDSHAKE_LINE_C64_TO_ESP, GPIO_INTR_LOW_LEVEL);
+        gpio_set_intr_type(HANDSHAKE_LINE_C64_TO_ESP, pc2Edge ? GPIO_INTR_NEGEDGE : GPIO_INTR_LOW_LEVEL);
         gpio_intr_enable(HANDSHAKE_LINE_C64_TO_ESP);
         gpio_isr_handler_add(HANDSHAKE_LINE_C64_TO_ESP, (gpio_isr_t) onHandshakeSignalReceived, NULL);
 
@@ -170,6 +170,13 @@ namespace WiC64 {
             if (wait > 0) esp_rom_delay_us((uint32_t) wait);
         }
         sendHandshakeSignal();
+    }
+
+    void Userport::setPc2Edge(bool edge) {
+        pc2Edge = edge;
+        if (connected) {
+            gpio_set_intr_type(HANDSHAKE_LINE_C64_TO_ESP, edge ? GPIO_INTR_NEGEDGE : GPIO_INTR_LOW_LEVEL);
+        }
     }
 
     void Userport::dumpTrace(void) {
