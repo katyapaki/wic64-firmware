@@ -311,12 +311,14 @@ namespace WiC64 {
         if (!service->response->isQueued()) {
             ESP_LOG_HEXV(TAG, "Response", data, size);
         }
-        userport->requestEnded();
         service->finalizeRequest("Request handled successfully", true);
     }
 
     void Service::finalizeRequest(const char* message, bool success) {
         esp_log_level_t level;
+
+        // Answered in full, with or without a payload: the C64 is idle.
+        if (success) userport->requestEnded();
 
         level = success ? ESP_LOG_INFO : ESP_LOG_WARN;
         ESP_LOG_LEVEL(level, TAG, "Finalizing request: %s", message);
