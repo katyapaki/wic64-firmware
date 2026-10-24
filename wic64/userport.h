@@ -189,6 +189,9 @@ namespace WiC64 {
             // In fast mode: wait (at most maxUs) until the C64 has read the
             // last byte of an answer, instead of a fixed pause.
             void waitForTrailingHandshake(uint32_t maxUs);
+            static const int64_t HANDSHAKE_GAP_US = 200;
+            volatile int64_t timeOfLastHandshakeSentUs = 0;
+            void sendSpacedHandshake(void);
             // A request was answered in full: the C64 is idle until its next
             // handshake.
             void requestEnded(void);

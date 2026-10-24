@@ -152,6 +152,20 @@ namespace WiC64 {
         SET_LOW(HANDSHAKE_LINE_ESP_TO_C64);
         esp_rom_delay_us(5);
         SET_HIGH(HANDSHAKE_LINE_ESP_TO_C64);
+        timeOfLastHandshakeSentUs = esp_timer_get_time();
+    }
+
+    // A handshake the ESP sends on its own, not in answer to one from the
+    // C64: the C64 sees each as a bit in CIA 2's ICR, and two that come
+    // before it looks become one. The fixed pauses kept them apart; in fast
+    // mode keep at least HANDSHAKE_GAP_US between them (the C64 looks every
+    // ~10 us while it waits).
+    void Userport::sendSpacedHandshake() {
+        if (fast) {
+            int64_t wait = timeOfLastHandshakeSentUs + HANDSHAKE_GAP_US - esp_timer_get_time();
+            if (wait > 0) esp_rom_delay_us((uint32_t) wait);
+        }
+        sendHandshakeSignal();
     }
 
     inline void Userport::readByte(uint8_t *byte) {
@@ -219,7 +233,7 @@ namespace WiC64 {
         if (isInitiallySending()) {
             ESP_LOGV(TAG, "Sending initial handshake to start pending transfer");
             if (!skips(2)) vTaskDelay(pdMS_TO_TICKS(1));
-            sendHandshakeSignal(); // first handshake the c64 is waiting for after changing direction
+            sendSpacedHandshake(); // first handshake the c64 is waiting for after changing direction
         }
 
         if (type == TRANSFER_TYPE_RECEIVE_PARTIAL ||
@@ -228,7 +242,7 @@ namespace WiC64 {
 
             ESP_LOGV(TAG, "Sending initial handshake signal");
             if (!skips(1)) vTaskDelay(pdMS_TO_TICKS(5));
-            sendHandshakeSignal();
+            sendSpacedHandshake();
         }
     }
 
@@ -250,7 +264,7 @@ namespace WiC64 {
                 userport->timeOfFinalHandshake = esp_timer_get_time();
                 userport->trailingHandshakeDue = true;
             }
-            userport->sendHandshakeSignal();
+            userport->sendSpacedHandshake();
 
             if (type == TRANSFER_TYPE_RECEIVE_FULL && !userport->skips(4)) {
                 vTaskDelay(pdMS_TO_TICKS(1));
