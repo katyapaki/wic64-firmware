@@ -179,6 +179,13 @@ namespace WiC64 {
             // c64-binmon fast mode (bit 1 of $60): no fixed pauses around
             // transfers; the handshakes alone keep both sides in step.
             volatile bool fast = false;
+            // Which pauses fast mode drops (diagnostics, ?fastskip=HEX on the
+            // web page): 1 before a partial transfer's handshake (5 ms), 2
+            // before sending (1 ms), 4 after receiving (1 ms), 8 after each
+            // transfer (3 ms; replaced by waiting for the C64's read of the
+            // last byte), 16 when finalizing (5 ms).
+            volatile uint32_t fastSkip = 0x1f;
+            bool skips(uint32_t bit) { return fast && (fastSkip & bit); }
             // In fast mode: wait (at most maxUs) until the C64 has read the
             // last byte of an answer, instead of a fixed pause.
             void waitForTrailingHandshake(uint32_t maxUs);

@@ -2,8 +2,10 @@
 #include "connection.h"
 #include "settings.h"
 #include "utilities.h"
+#include "userport.h"
 
 namespace WiC64 {
+    extern Userport *userport;
     const char* Webserver::TAG = "SERVER";
 
     extern Webserver *webserver;
@@ -52,6 +54,10 @@ namespace WiC64 {
             if (level == "VERBOSE") WiC64::loglevel(ESP_LOG_VERBOSE); else goto ERROR;
         }
 
+        if (server->hasArg("fastskip")) {
+            userport->fastSkip = strtoul(server->arg("fastskip").c_str(), NULL, 16);
+        }
+
         if (server->hasArg("disconnect")) {
             webserver->reloadAndClearQueryString();
             xTaskCreatePinnedToCore(disconnectTask, "DISCONNECT", 4096, NULL, 5, NULL, 0);
@@ -70,6 +76,7 @@ namespace WiC64 {
             "<p>Current loglevel: <strong>" +
             log_level_to_string(esp_log_level_get(WiC64::TAG)) +
             "</strong></p>"
+            "<p>fastskip: <strong>" + String(userport->fastSkip, HEX) + "</strong></p>"
 
             "<ul>"
             "<li><a href='/?level=NONE'>NONE</a></li>"

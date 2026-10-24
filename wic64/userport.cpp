@@ -218,7 +218,7 @@ namespace WiC64 {
 
         if (isInitiallySending()) {
             ESP_LOGV(TAG, "Sending initial handshake to start pending transfer");
-            if (!fast) vTaskDelay(pdMS_TO_TICKS(1));
+            if (!skips(2)) vTaskDelay(pdMS_TO_TICKS(1));
             sendHandshakeSignal(); // first handshake the c64 is waiting for after changing direction
         }
 
@@ -227,7 +227,7 @@ namespace WiC64 {
             previousTransferType == TRANSFER_TYPE_SEND_PARTIAL) {
 
             ESP_LOGV(TAG, "Sending initial handshake signal");
-            if (!fast) vTaskDelay(pdMS_TO_TICKS(5));
+            if (!skips(1)) vTaskDelay(pdMS_TO_TICKS(5));
             sendHandshakeSignal();
         }
     }
@@ -252,7 +252,7 @@ namespace WiC64 {
             }
             userport->sendHandshakeSignal();
 
-            if (type == TRANSFER_TYPE_RECEIVE_FULL && !userport->fast) {
+            if (type == TRANSFER_TYPE_RECEIVE_FULL && !userport->skips(4)) {
                 vTaskDelay(pdMS_TO_TICKS(1));
             }
 
@@ -273,7 +273,7 @@ namespace WiC64 {
                 userport->size, userport->isSending(userport->previousTransferType) ? "sent" : "received");
         }
 
-        if (!userport->fast) {
+        if (!userport->skips(8)) {
             vTaskDelay(pdMS_TO_TICKS(3));
         } else if (type == TRANSFER_TYPE_SEND_FULL) {
             // The port must stay driven until the C64 has read the last byte.
