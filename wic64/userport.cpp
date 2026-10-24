@@ -246,6 +246,10 @@ namespace WiC64 {
         TRANSFER_TYPE type = userport->previousTransferType;
 
         if (type == TRANSFER_TYPE_SEND_FULL || type == TRANSFER_TYPE_RECEIVE_FULL) {
+            if (type == TRANSFER_TYPE_SEND_FULL) {
+                userport->timeOfFinalHandshake = esp_timer_get_time();
+                userport->trailingHandshakeDue = true;
+            }
             userport->sendHandshakeSignal();
 
             if (type == TRANSFER_TYPE_RECEIVE_FULL) {
@@ -432,6 +436,13 @@ namespace WiC64 {
     }
 
     void Userport::onHandshakeSignalReceived(void) {
+        if (userport->trailingHandshakeDue && userport->transferType == TRANSFER_TYPE_NONE) {
+            userport->trailingHandshakeDue = false;
+            // The read of the last byte, soon after the final handshake; a
+            // C64 that gave up halfway sends none, and its next request must
+            // not be taken for it.
+            if (esp_timer_get_time() - userport->timeOfFinalHandshake < 20000) return;
+        }
         userport->resetTimeout();
 
         if (userport->transferState == TRANSFER_STATE_PENDING) {
