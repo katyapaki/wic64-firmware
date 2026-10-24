@@ -26,6 +26,7 @@ namespace WiC64 {
     int TcpClient::open(const char* host, const uint16_t port) {
         bool connected = false;
         m_notify = false;
+        userport->fast = false;
         if (this->connected()) {
             ESP_LOGW(TAG, "Closing previously opened connection");
             close();
@@ -93,15 +94,17 @@ namespace WiC64 {
     void TcpClient::close(void) {
         ESP_LOGI(TAG, "Closing connection");
         m_notify = false;
+        userport->fast = false;
         xSemaphoreTake(m_lock, portMAX_DELAY);
         m_client.stop();
         xSemaphoreGive(m_lock);
     }
 
-    void TcpClient::notify(bool on) {
+    void TcpClient::notify(uint8_t mode) {
         m_rung = false;
-        m_notify = on;
-        ESP_LOGI(TAG, "Doorbell %s", on ? "on" : "off");
+        m_notify = mode & 1;
+        userport->fast = (mode & 2) != 0;
+        ESP_LOGI(TAG, "Doorbell %s%s", m_notify ? "on" : "off", userport->fast ? ", fast" : "");
     }
 
     void TcpClient::doorbell(void) {

@@ -176,6 +176,12 @@ namespace WiC64 {
             // c64-binmon doorbell: pulse FLAG2 once, if no transfer runs
             // and the C64 has not handshaken for quietMs. True if it rang.
             bool ringDoorbell(uint32_t quietMs);
+            // c64-binmon fast mode (bit 1 of $60): no fixed pauses around
+            // transfers; the handshakes alone keep both sides in step.
+            volatile bool fast = false;
+            // In fast mode: wait (at most maxUs) until the C64 has read the
+            // last byte of an answer, instead of a fixed pause.
+            void waitForTrailingHandshake(uint32_t maxUs);
             // A request was answered in full: the C64 is idle until its next
             // handshake.
             void requestEnded(void);

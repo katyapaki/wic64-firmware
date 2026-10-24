@@ -98,14 +98,15 @@ namespace WiC64 {
         }
 
         else if (id() == WIC64_CMD_TCP_NOTIFY) {
-            // Payload: 1 = pulse FLAG2 whenever data waits (or the peer
-            // closed) and the C64 has not read since, 0 = stop. Opening or
-            // closing a connection stops it too.
+            // Payload bit 0: pulse FLAG2 whenever data waits (or the peer
+            // closed) and the C64 has not read since; bit 1: no fixed
+            // pauses around transfers. 0 stops both, as does opening or
+            // closing a connection.
             if (request()->payload()->size() < 1) {
                 error(CLIENT_ERROR, "No mode specified", "!0");
                 goto DONE;
             }
-            tcpClient->notify(request()->payload()->data()[0] != 0);
+            tcpClient->notify(request()->payload()->data()[0]);
             success("Success", "0");
         }
 

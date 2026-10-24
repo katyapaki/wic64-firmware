@@ -40,7 +40,8 @@ namespace WiC64 {
             int32_t write(uint8_t* data, uint32_t size);
             void close(void);
 
-            void notify(bool on);
+            // Bit 0: ring the doorbell; bit 1: fast transfers.
+            void notify(uint8_t mode);
             void notifyServed(void) { m_rung = false; }
     };
 }

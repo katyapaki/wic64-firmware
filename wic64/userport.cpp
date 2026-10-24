@@ -218,7 +218,7 @@ namespace WiC64 {
 
         if (isInitiallySending()) {
             ESP_LOGV(TAG, "Sending initial handshake to start pending transfer");
-            vTaskDelay(pdMS_TO_TICKS(1));
+            if (!fast) vTaskDelay(pdMS_TO_TICKS(1));
             sendHandshakeSignal(); // first handshake the c64 is waiting for after changing direction
         }
 
@@ -227,7 +227,7 @@ namespace WiC64 {
             previousTransferType == TRANSFER_TYPE_SEND_PARTIAL) {
 
             ESP_LOGV(TAG, "Sending initial handshake signal");
-            vTaskDelay(pdMS_TO_TICKS(5));
+            if (!fast) vTaskDelay(pdMS_TO_TICKS(5));
             sendHandshakeSignal();
         }
     }
@@ -252,7 +252,7 @@ namespace WiC64 {
             }
             userport->sendHandshakeSignal();
 
-            if (type == TRANSFER_TYPE_RECEIVE_FULL) {
+            if (type == TRANSFER_TYPE_RECEIVE_FULL && !userport->fast) {
                 vTaskDelay(pdMS_TO_TICKS(1));
             }
 
@@ -273,7 +273,12 @@ namespace WiC64 {
                 userport->size, userport->isSending(userport->previousTransferType) ? "sent" : "received");
         }
 
-        vTaskDelay(pdMS_TO_TICKS(3));
+        if (!userport->fast) {
+            vTaskDelay(pdMS_TO_TICKS(3));
+        } else if (type == TRANSFER_TYPE_SEND_FULL) {
+            // The port must stay driven until the C64 has read the last byte.
+            userport->waitForTrailingHandshake(2000);
+        }
 
         if (userport->previousTransferType != TRANSFER_TYPE_SEND_PARTIAL) {
             userport->setPortToInput();
@@ -298,6 +303,13 @@ namespace WiC64 {
         }
 
         deleteTimeoutTask();
+    }
+
+    void Userport::waitForTrailingHandshake(uint32_t maxUs) {
+        int64_t until = esp_timer_get_time() + maxUs;
+        while (trailingHandshakeDue && esp_timer_get_time() < until) {
+            esp_rom_delay_us(5);
+        }
     }
 
     bool Userport::ringDoorbell(uint32_t quietMs) {
