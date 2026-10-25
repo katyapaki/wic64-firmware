@@ -134,7 +134,7 @@ namespace WiC64 {
         }
         m_stored.putUChar("mode", mode);
         m_storedMode = mode;
-        ESP_LOGI(TAG, mode ? "Keeping the link across restarts" : "Not keeping the link across restarts");
+        ESP_LOGI(TAG, "%s the link across restarts", mode ? "Keeping" : "Not keeping");
     }
 
     void TcpClient::restore(void) {
