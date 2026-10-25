@@ -14,6 +14,7 @@ namespace WiC64 {
     TcpClient::TcpClient() {
         m_lock = xSemaphoreCreateMutex();
         xTaskCreatePinnedToCore(doorbellTask, "DOORBELL", 4096, NULL, 5, NULL, 1);
+        restore();
         xTaskCreatePinnedToCore(keepTask, "TCPKEEP", 4096, NULL, 4, NULL, 1);
         ESP_LOGI(TAG, "TCP client initialized");
     }
@@ -31,6 +32,9 @@ namespace WiC64 {
         m_keep = false;
         m_renewed = false;
         userport->fast = false;
+        // Another host is another program's: forget the stored link. The
+        // stub opening its bridge again keeps it (no flash write).
+        if (m_storedMode && m_stored.getString("host", "") != host) store(0);
         // The host to keep the link to, if the C64 asks for it next.
         strncpy(m_host, host, sizeof m_host - 1);
         m_host[sizeof m_host - 1] = 0;
@@ -105,6 +109,7 @@ namespace WiC64 {
         m_keep = false;
         m_renewed = false;
         userport->fast = false;
+        store(0);
         xSemaphoreTake(m_lock, portMAX_DELAY);
         m_client.stop();
         xSemaphoreGive(m_lock);
@@ -117,7 +122,34 @@ namespace WiC64 {
         m_keep = (mode & 4) != 0 && m_host[0] != 0;
         ESP_LOGI(TAG, "Doorbell %s%s%s", m_notify ? "on" : "off", userport->fast ? ", fast" : "",
             m_keep ? ", keeping the link" : "");
+        store(m_keep ? (mode & NOTIFY_MODES) : 0);
         return NOTIFY_MODES;
+    }
+
+    void TcpClient::store(uint8_t mode) {
+        if (mode == m_storedMode && (mode == 0 || m_stored.getString("host", "") == m_host)) return;
+        if (mode) {
+            m_stored.putString("host", m_host);
+            m_stored.putUShort("port", m_port);
+        }
+        m_stored.putUChar("mode", mode);
+        m_storedMode = mode;
+        ESP_LOGI(TAG, mode ? "Keeping the link across restarts" : "Not keeping the link across restarts");
+    }
+
+    void TcpClient::restore(void) {
+        m_stored.begin("binmon");
+        m_storedMode = m_stored.getUChar("mode", 0);
+        if (!(m_storedMode & 4)) return;
+        String host = m_stored.getString("host", "");
+        if (host.isEmpty()) return;
+        strncpy(m_host, host.c_str(), sizeof m_host - 1);
+        m_host[sizeof m_host - 1] = 0;
+        m_port = m_stored.getUShort("port", 0);
+        m_notify = m_storedMode & 1;
+        userport->fast = (m_storedMode & 2) != 0;
+        m_keep = true;
+        ESP_LOGI(TAG, "Keeping the link to %s on port %d, as before the restart", m_host, m_port);
     }
 
     bool TcpClient::takeRenewed(void) {
@@ -142,6 +174,7 @@ namespace WiC64 {
         m_keep = false;
         m_renewed = false;
         userport->fast = false;
+        store(0);
     }
 
     void TcpClient::keep(void) {

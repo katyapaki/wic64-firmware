@@ -4,6 +4,7 @@
 #include "data.h"
 
 #include "WiFiClient.h"
+#include "Preferences.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
@@ -34,6 +35,15 @@ namespace WiC64 {
             volatile bool m_renewed = false;
             void keep(void);
             static void keepTask(void*);
+
+            // The kept link survives a restart of the WiC64 (its reset
+            // button, a flash): it is stored in flash ("binmon": mode,
+            // host, port), written only when it changes, and taken up
+            // again at the start. Whatever ends keeping clears it.
+            Preferences m_stored;
+            uint8_t m_storedMode = 0;
+            void store(uint8_t mode);
+            void restore(void);
 
             // The doorbell task asks while commands run on the service task.
             SemaphoreHandle_t m_lock;
