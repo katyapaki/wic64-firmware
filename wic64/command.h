@@ -27,6 +27,7 @@ namespace WiC64 {
             const static uint8_t CONNECTION_ERROR = 3;
             const static uint8_t NETWORK_ERROR    = 4;
             const static uint8_t SERVER_ERROR     = 5;
+            const static uint8_t STATUS_RENEWED   = 6; // c64-binmon: a TCP read on a link opened again
 
             static Command* create(Request* request);
             static void execute(Command* command);

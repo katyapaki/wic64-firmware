@@ -10,6 +10,7 @@
 #include "userport.h"
 #include "data.h"
 #include "command.h"
+#include "tcpClient.h"
 #include "display.h"
 #include "utilities.h"
 
@@ -21,6 +22,7 @@ namespace WiC64 {
     extern Service *service;
     extern Userport *userport;
     extern Display *display;
+    extern TcpClient *tcpClient;
 
     Service::Service() {
         esp_event_loop_args_t event_loop_args = {
@@ -73,6 +75,7 @@ namespace WiC64 {
 
         service->request = service->protocol->createRequest(header);
         service->command = Command::create(service->request);
+        tcpClient->otherCommand(service->command->id());
 
         if (customTransferTimeout) {
             transferTimeout = customTransferTimeout;

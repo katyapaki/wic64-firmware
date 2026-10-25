@@ -2,6 +2,7 @@
 #include "tcpClient.h"
 #include "service.h"
 #include "userport.h"
+#include "commands/commands.h"
 
 namespace WiC64 {
     const char* TcpClient::TAG = "TCPCLIENT";
@@ -13,6 +14,7 @@ namespace WiC64 {
     TcpClient::TcpClient() {
         m_lock = xSemaphoreCreateMutex();
         xTaskCreatePinnedToCore(doorbellTask, "DOORBELL", 4096, NULL, 5, NULL, 1);
+        xTaskCreatePinnedToCore(keepTask, "TCPKEEP", 4096, NULL, 4, NULL, 1);
         ESP_LOGI(TAG, "TCP client initialized");
     }
 
@@ -26,7 +28,13 @@ namespace WiC64 {
     int TcpClient::open(const char* host, const uint16_t port) {
         bool connected = false;
         m_notify = false;
+        m_keep = false;
+        m_renewed = false;
         userport->fast = false;
+        // The host to keep the link to, if the C64 asks for it next.
+        strncpy(m_host, host, sizeof m_host - 1);
+        m_host[sizeof m_host - 1] = 0;
+        m_port = port;
         if (this->connected()) {
             ESP_LOGW(TAG, "Closing previously opened connection");
             close();
@@ -94,17 +102,74 @@ namespace WiC64 {
     void TcpClient::close(void) {
         ESP_LOGI(TAG, "Closing connection");
         m_notify = false;
+        m_keep = false;
+        m_renewed = false;
         userport->fast = false;
         xSemaphoreTake(m_lock, portMAX_DELAY);
         m_client.stop();
         xSemaphoreGive(m_lock);
     }
 
-    void TcpClient::notify(uint8_t mode) {
+    uint8_t TcpClient::notify(uint8_t mode) {
         m_rung = false;
         m_notify = mode & 1;
         userport->fast = (mode & 2) != 0;
-        ESP_LOGI(TAG, "Doorbell %s%s", m_notify ? "on" : "off", userport->fast ? ", fast" : "");
+        m_keep = (mode & 4) != 0 && m_host[0] != 0;
+        ESP_LOGI(TAG, "Doorbell %s%s%s", m_notify ? "on" : "off", userport->fast ? ", fast" : "",
+            m_keep ? ", keeping the link" : "");
+        return NOTIFY_MODES;
+    }
+
+    bool TcpClient::takeRenewed(void) {
+        bool r = m_renewed;
+        m_renewed = false;
+        return r;
+    }
+
+    void TcpClient::otherCommand(uint8_t id) {
+        switch (id) {
+            case WIC64_CMD_TCP_OPEN:
+            case WIC64_CMD_TCP_READ:
+            case WIC64_CMD_TCP_WRITE:
+            case WIC64_CMD_TCP_CLOSE:
+            case WIC64_CMD_TCP_AVAILABLE:
+            case WIC64_CMD_TCP_NOTIFY:
+            case WIC64_CMD_SET_REMOTE_TIMEOUT:
+                return;
+        }
+        if (m_notify || m_keep) ESP_LOGI(TAG, "Another program uses the WiC64: doorbell off");
+        m_notify = false;
+        m_keep = false;
+        m_renewed = false;
+        userport->fast = false;
+    }
+
+    void TcpClient::keep(void) {
+        if (!m_keep || m_renewed) return;
+        // Open again outside the lock's long hold only when nothing runs:
+        // a command in progress has the client.
+        if (!service->idle()) return;
+        if (xSemaphoreTake(m_lock, 0) != pdTRUE) return;
+        bool gone = !m_client.connected();
+        if (gone) {
+            m_client.stop();
+            bool back = m_client.connect(m_host, m_port, (int32_t) KEEP_TIMEOUT_MS);
+            if (back && m_keep) {
+                m_renewed = true;
+                m_rung = false;
+                ESP_LOGI(TAG, "Opened the connection to %s on port %d again", m_host, m_port);
+            } else if (back) {
+                m_client.stop();  // given up meanwhile
+            }
+        }
+        xSemaphoreGive(m_lock);
+    }
+
+    void TcpClient::keepTask(void*) {
+        while (true) {
+            vTaskDelay(pdMS_TO_TICKS(KEEP_RETRY_MS));
+            if (tcpClient != NULL) tcpClient->keep();
+        }
     }
 
     void TcpClient::doorbell(void) {
@@ -115,7 +180,11 @@ namespace WiC64 {
 
         // Never wait here: a command may hold the client for seconds.
         if (xSemaphoreTake(m_lock, 0) != pdTRUE) return;
-        bool waiting = !m_client.connected() || m_client.available() > 0;
+        bool connected = m_client.connected();
+        // Keeping the link, a closed connection is no news for the C64; a
+        // connection opened again is.
+        bool waiting = m_keep ? m_renewed || (connected && m_client.available() > 0)
+                              : !connected || m_client.available() > 0;
         xSemaphoreGive(m_lock);
 
         if (waiting && userport->ringDoorbell(QUIET_MS)) {

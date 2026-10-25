@@ -88,7 +88,11 @@ namespace WiC64 {
 
         else if (id() == WIC64_CMD_TCP_READ) {
             tcpClient->notifyServed();
-            if (tcpClient->connected()) {
+            if (tcpClient->takeRenewed()) {
+                // c64-binmon: the connection is a new one, opened again by
+                // the firmware (keeping the link); nothing read.
+                error(STATUS_RENEWED, "New connection", "!E");
+            } else if (tcpClient->connected()) {
                 if ((size = tcpClient->read(response()->data())) > -1) {
                     response()->size(size);
                 }
@@ -100,13 +104,16 @@ namespace WiC64 {
         else if (id() == WIC64_CMD_TCP_NOTIFY) {
             // Payload bit 0: pulse FLAG2 whenever data waits (or the peer
             // closed) and the C64 has not read since; bit 1: no fixed
-            // pauses around transfers. 0 stops both, as does opening or
-            // closing a connection.
+            // pauses around transfers; bit 2: keep the link (open it again
+            // when it is gone, and ring then instead of when it closes). 0
+            // stops all three, as does opening or closing a connection, or
+            // another program's command. The answer is one byte: the bits
+            // this firmware knows.
             if (request()->payload()->size() < 1) {
                 error(CLIENT_ERROR, "No mode specified", "!0");
                 goto DONE;
             }
-            tcpClient->notify(request()->payload()->data()[0]);
+            response()->appendByte(tcpClient->notify(request()->payload()->data()[0]));
             success("Success", "0");
         }
 
